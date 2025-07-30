@@ -18,7 +18,9 @@ La representación del problema incluye:
 ## Algoritmo A* Search
 
 La búsqueda A* funciona como una mejora de la búsqueda de costo uniforme, al incluir una **heurística h(n)** que estima el costo desde el nodo actual hasta el objetivo. La función de evaluación es:
+
 **f(n) = g(n) + h(n)**
+
 Donde:
 - `g(n)` es el costo del camino desde el nodo inicial hasta el nodo actual.
 - `h(n)` es la estimación del costo restante (heurística).
