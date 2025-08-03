@@ -1,0 +1,126 @@
+import heapq
+
+# --- Clase Node ---
+class Node:
+    def __init__(self, position, parent=None, action=None, path_cost=0):
+        self.position = position
+        self.parent = parent
+        self.action = action
+        self.path_cost = path_cost
+
+    def __lt__(self, other):
+        # Esta comparación es clave para el heap, compara el costo total (path_cost + heurística)
+        # pero para el nodo en sí, solo necesitamos el path_cost para la reconstrucción
+        return self.path_cost < other.path_cost
+
+# --- Clase Problem ---
+class Problem:
+    def __init__(self, initial_state, goal_state, maze):
+        self.initial = initial_state
+        self.goal = goal_state
+        self.maze = maze
+        self.actions = {
+            'Up': (-1, 0),
+            'Down': (1, 0),
+            'Left': (0, -1),
+            'Right': (0, 1)
+        }
+
+    def is_goal(self, state):
+        return state == self.goal
+
+    def action_cost(self, state, action, next_state):
+        return 1
+
+    def get_valid_neighbors(self, state):
+        neighbors = []
+        for action, delta in self.actions.items():
+            row, col = state
+            d_row, d_col = delta
+            new_row, new_col = row + d_row, col + d_col
+            
+            # Verificar límites del laberinto y que no sea una pared
+            if 0 <= new_row < len(self.maze) and 0 <= new_col < len(self.maze[0]) and self.maze[new_row][new_col] != '#':
+                neighbors.append({'action': action, 'position': (new_row, new_col)})
+        return neighbors
+
+# --- Funciones de búsqueda ---
+def find_exit(maze):
+    start = None
+    goal = None
+    
+    # Encontrar la posición de 'S' y 'E'
+    for r in range(len(maze)):
+        for c in range(len(maze[0])):
+            if maze[r][c] == 'S':
+                start = (r, c)
+            elif maze[r][c] == 'E':
+                goal = (r, c)
+
+    if not start or not goal:
+        print("Error: No se encontraron las posiciones de inicio (S) o salida (E).")
+        return None, None
+
+    problem = Problem(start, goal, maze)
+
+    def manhattan_distance(pos, goal_pos):
+        return abs(pos[0] - goal_pos[0]) + abs(pos[1] - goal_pos[1])
+
+    start_node = Node(start, path_cost=0)
+    # La prioridad es el costo_total = costo_camino + heurística
+    frontier = [(manhattan_distance(start, goal), start_node)]
+    heapq.heapify(frontier)
+    reached = {start: start_node}
+
+    while frontier:
+        f_cost, current_node = heapq.heappop(frontier)
+
+        if problem.is_goal(current_node.position):
+            return reconstruct_path(current_node)
+
+        for neighbor_info in problem.get_valid_neighbors(current_node.position):
+            neighbor_pos = neighbor_info['position']
+            action = neighbor_info['action']
+
+            new_cost = current_node.path_cost + problem.action_cost(current_node.position, action, neighbor_pos)
+
+            if neighbor_pos not in reached or new_cost < reached[neighbor_pos].path_cost:
+                neighbor_node = Node(neighbor_pos, parent=current_node, action=action, path_cost=new_cost)
+                reached[neighbor_pos] = neighbor_node
+                priority = new_cost + manhattan_distance(neighbor_pos, goal)
+                heapq.heappush(frontier, (priority, neighbor_node))
+
+    return None, None # No se encontró una salida
+
+def reconstruct_path(node):
+    path_actions = []
+    path_positions = []
+    
+    while node.parent: # Detenerse antes del nodo inicial
+        path_actions.append(node.action)
+        path_positions.append(node.position)
+        node = node.parent
+    path_positions.append(node.position) # Agregar la posición inicial
+    
+    path_positions.reverse()
+    path_actions.reverse()
+    
+    return path_positions, path_actions
+
+# --- Ejecución ---
+# Laberinto con el camino complejo
+maze = [
+    ["#", "#", "#", "#", "#", "#", "#", "#"],
+    ["#", "S", "#", " ", "#", " ", "E", "#"],
+    ["#", " ", " ", " ", "#", " ", " ", "#"],
+    ["#", " ", "#", " ", " ", " ", "#", "#"],
+    ["#", "#", "#", "#", "#", "#", "#", "#"],
+    ["#", "#", "#", "#", "#", "#", "#", "#"]
+]
+
+path_positions, path_actions = find_exit(maze)
+if path_positions:
+    print("Path to exit (positions):", path_positions)
+    print("Path to exit (actions):", path_actions)
+else:
+    print("No se encontró una salida.")
