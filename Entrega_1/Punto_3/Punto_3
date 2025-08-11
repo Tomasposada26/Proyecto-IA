@@ -1,48 +1,54 @@
-from collections import deque 
+import time
+import tracemalloc
+from collections import deque
 
 class Node:
-    def __init__(self,state, parent=None,action=None,path_cost=0):
+    def __init__(self, state, parent=None, action=None, path_cost=0):
         self.state = state
         self.parent = parent
-        self.action= action
-    def __lt__(self,other):
+        self.action = action
+        self.path_cost = path_cost
+
+    def __lt__(self, other):
         return self.path_cost < other.path_cost
-        
-    
+
+    @staticmethod
     def expand(problem, node):
-        s = node.state 
+        s = node.state
         for action in problem.actions(s):
-            s_prime = problem.result(s, action) 
-            yield Node(state=s_prime, parent=node, action=action) 
-            
+            s_prime = problem.result(s, action)
+            yield Node(state=s_prime, parent=node, action=action)
+
 class Problem:
-       def __init__(self, initial, goal, actions, result, is_goal):
-        self.initial = initial #Estado inicial
-        self.goal = goal #Estado objetivo
-        self.actions = actions #acciones disponibles desde un estado.
-        self.result = result  #estado resultante de aplicar una acción
-        self.is_goal = is_goal #verificación de si el estado es el estado objetivo     
-        
+    def __init__(self, initial, goal, actions, result, is_goal):
+        self.initial = initial
+        self.goal = goal
+        self.actions = actions
+        self.result = result
+        self.is_goal = is_goal
+
 def problem_metro():
     initial = 'Estacion A'
     goal = 'Estacion J'
-    actions= {
-        'Estacion A' : ['Estacion B','Estacion C'],
-        'Estacion B' : ['Estacion A','Estacion D','Estacion E'],
-        'Estacion C' : ['Estacion A', 'Estacion F'],
-        'Estacion D' : ['Estacion B','Estacion G'],
-        'Estacion E' : ['Estacion B','Estacion H','Estacion I'],
-        'Estacion F' : ['Estacion C','Estacion J'],
-        'Estacion G' : ['Estacion D'],
-        'Estacion H' : ['Estacion E'],
-        'Estacion I' : ['Estacion E','Estacion J'],
-        'Estacion J' : ['Estacion F','Estacion I']
-        }
-    def result(state,action):
+    actions = {
+        'Estacion A': ['Estacion B', 'Estacion C'],
+        'Estacion B': ['Estacion A', 'Estacion D', 'Estacion E'],
+        'Estacion C': ['Estacion A', 'Estacion F'],
+        'Estacion D': ['Estacion B', 'Estacion G'],
+        'Estacion E': ['Estacion B', 'Estacion H', 'Estacion I'],
+        'Estacion F': ['Estacion C', 'Estacion J'],
+        'Estacion G': ['Estacion D'],
+        'Estacion H': ['Estacion E'],
+        'Estacion I': ['Estacion E', 'Estacion J'],
+        'Estacion J': ['Estacion F', 'Estacion I']
+    }
+
+    def result(state, action):
         return action
+
     def is_goal(state):
         return state == goal
-    
+
     def breadth_first_search(problem):
         node = Node(problem.initial)
         if problem.is_goal(node.state):
@@ -52,13 +58,13 @@ def problem_metro():
         while frontier:
             node = frontier.popleft()
             explored.add(node.state)
-            for child in Node.expand(problem,node):
+            for child in Node.expand(problem, node):
                 if child.state not in explored and all(child.state != n.state for n in frontier):
                     if problem.is_goal(child.state):
                         return child
                     frontier.append(child)
         return None
-    
+
     def depth_limited_search(problem, limit):
         def recursive_dls(node, problem, limit):
             if problem.is_goal(node.state):
@@ -67,7 +73,7 @@ def problem_metro():
                 return None
             else:
                 for child in Node.expand(problem, node):
-                    result = recursive_dls(child, problem, limit-1)
+                    result = recursive_dls(child, problem, limit - 1)
                     if result:
                         return result
                 return None
@@ -80,30 +86,39 @@ def problem_metro():
             if result:
                 return result
             depth += 1
-  
-    problem = Problem(initial, goal, lambda s: actions.get(s,[]), result, is_goal)
-    solution = breadth_first_search(problem)
-  
 
-    if solution:
+    problem = Problem(initial, goal, lambda s: actions.get(s, []), result, is_goal)
+
+    #BFS
+    tracemalloc.start()
+    start_time = time.perf_counter()
+    solution_bfs = breadth_first_search(problem)
+    bfs_time = time.perf_counter() - start_time
+    bfs_memory = tracemalloc.get_traced_memory()[1] / 1024 
+    tracemalloc.stop()
+
+    #IDS
+    tracemalloc.start()
+    start_time = time.perf_counter()
+    solution_ids = iterative_deepening_search(problem)
+    ids_time = time.perf_counter() - start_time
+    ids_memory = tracemalloc.get_traced_memory()[1] / 1024  
+    tracemalloc.stop()
+
+
+    def get_path(solution):
         path = []
         while solution:
             path.append(solution.state)
             solution = solution.parent
-        path.reverse()
-        print("Ruta encontrada:", path)
-    else:
-        print("Ruta no encontrada")
-        
-    solution_ids = iterative_deepening_search(problem)
-    if solution_ids:
-        path_ids = []
-        while solution_ids:
-            path_ids.append(solution_ids.state)
-            solution_ids = solution_ids.parent
-        path_ids.reverse()
-        print("Ruta encontrada por IDS:", path_ids)
-    else:
-        print("Ruta no encontrada por IDS")
-      
+        return list(reversed(path))
+
+    path_bfs = get_path(solution_bfs)
+    path_ids = get_path(solution_ids)
+
+    
+    print("RESULTADOS")
+    print(f"BFS -> Ruta: {path_bfs}, Tiempo: {bfs_time:.6f}s, Memoria: {bfs_memory:.2f} KB")
+    print(f"IDS -> Ruta: {path_ids}, Tiempo: {ids_time:.6f}s, Memoria: {ids_memory:.2f} KB")
+
 problem_metro()
