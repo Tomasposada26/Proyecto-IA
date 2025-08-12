@@ -3,7 +3,12 @@ COMPARACIÓN DE BFS E IDS
 4. Comparación: Tiempo y Memoria
 
  Algoritmo  Ruta encontrada         Tiempo   Memoria
+ 
+ 
  BFS        A → C → F → J           0.001686  4.84    
+ 
+ 
+ 
  IDS        A → C → F → J           0.000142  2.51         
 
 5. Explicación de diferencias
