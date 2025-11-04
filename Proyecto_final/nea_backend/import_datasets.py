@@ -1,15 +1,33 @@
-# Script para importar datasets CSV a entertainment_db.json
-# Uso: python import_datasets.py
+"""Script for importing CSV datasets into entertainment_db.json.
+
+This script reads several CSV files corresponding to different categories
+(videojuegos, peliculas, libros, musica) and converts them into a single JSON
+database used by the NEA recommender.  Each category has a configuration that
+maps the desired fields to columns in the CSV.  If a particular CSV file
+includes no rating column, the script assigns a random rating between 2.4 and
+5.0 as a placeholder.  You can customise the CONFIG dictionary below to
+support alternative datasets or new categories.
+
+Usage:
+    python import_datasets.py
+"""
+
 
 import csv
 import json
 import os
+import random
+from typing import List, Dict
 
 BASE_PATH = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_PATH, "entertainment_db.json")
 DATASETS_PATH = os.path.join(BASE_PATH, "datasets")
 
-# Configuración de archivos y campos por categoría
+# Configuration of files and fields per category.  You can modify the
+# ``csv`` filenames to point to more recent datasets (e.g. movies_dataset.csv,
+# goodreads_books_100k.csv, spotify_metrics_2024.csv) and update the field
+# mappings accordingly.  Leave a value empty ("") to set the field to an
+# empty string.
 CONFIG = {
     "videojuegos": {
         "csv": "vgsales.csv",
@@ -20,8 +38,8 @@ CONFIG = {
             "sinopsis": "",
             "tags": "Genre",
             "link": "",
-            "plataforma": "Platform"
-        }
+            "plataforma": "Platform",
+        },
     },
     "peliculas": {
         "csv": "filmaffinity_dataset.csv",
@@ -32,8 +50,8 @@ CONFIG = {
             "sinopsis": "",
             "tags": "Género",
             "link": "",
-            "director": "Dirección"
-        }
+            "director": "Dirección",
+        },
     },
     "libros": {
         "csv": "books.csv",
@@ -44,8 +62,8 @@ CONFIG = {
             "sinopsis": "description",
             "tags": "genres",
             "link": "url",
-            "autor": "authors"
-        }
+            "autor": "authors",
+        },
     },
     "musica": {
         "csv": "Spotify_songs.csv",
@@ -56,28 +74,29 @@ CONFIG = {
             "sinopsis": "",
             "tags": "artist(s)_name",
             "link": "cover_url",
-            "artista": "artist(s)_name"
-        }
-    }
+            "artista": "artist(s)_name",
+        },
+    },
 }
 
-def parse_tags(value):
+
+def parse_tags(value: str) -> List[str]:
+    """Split a tag string into a list."""
     if not value:
         return []
-    if "," in value:
-        return [v.strip() for v in value.split(",") if v.strip()]
-    if ";" in value:
-        return [v.strip() for v in value.split(";") if v.strip()]
+    for sep in [",", ";"]:
+        if sep in value:
+            return [v.strip() for v in value.split(sep) if v.strip()]
     return [value.strip()]
 
-def import_category(cat, conf):
+
+def import_category(cat: str, conf: Dict) -> List[Dict]:
+    """Import a single category from its CSV file."""
     path = os.path.join(DATASETS_PATH, conf["csv"])
-    items = []
+    items: List[Dict] = []
     if not os.path.exists(path):
         print(f"[ERROR] No se encontró el archivo {path}")
         return items
-    import random
-    GENEROS_COMUNES = ["acción", "aventura", "deportes", "estrategia", "ficción", "drama", "comedia", "fantasía", "terror", "romance", "misterio", "musical", "historia", "ciencia ficción"]
     try:
         with open(path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -85,58 +104,95 @@ def import_category(cat, conf):
             if not rows:
                 print(f"[ADVERTENCIA] El archivo {path} está vacío o no tiene datos.")
             for row in rows:
-                item = {}
+                item: Dict = {}
                 for k, v in conf["fields"].items():
                     if v == "":
                         item[k] = ""
                     elif k == "tags":
                         item[k] = parse_tags(row.get(v, ""))
                     elif k == "calificacion":
-                        # Asignar calificación aleatoria entre 2.4 y 5.0
-                        item[k] = round(random.uniform(2.4, 5.0), 2)
+                        # Use provided rating if available; otherwise assign random between 2.4 and 5.0
+                        try:
+                            rating_str = row.get(v, "")
+                            item[k] = float(rating_str) if rating_str else round(random.uniform(2.4, 5.0), 2)
+                        except ValueError:
+                            item[k] = round(random.uniform(2.4, 5.0), 2)
                     else:
                         item[k] = row.get(v, "")
-                # Normalizar género/reseña
-                genero = (item.get("reseña", "") or "").lower()
-                genero_final = []
+                # Normalize the genre/reseña field
+                genero_raw = (item.get("reseña", "") or "").lower()
+                GENEROS_COMUNES = [
+                    "acción",
+                    "aventura",
+                    "deportes",
+                    "estrategia",
+                    "ficción",
+                    "drama",
+                    "comedia",
+                    "fantasía",
+                    "terror",
+                    "romance",
+                    "misterio",
+                    "musical",
+                    "historia",
+                    "ciencia ficción",
+                ]
+                genero_final: List[str] = []
                 for g in GENEROS_COMUNES:
-                    if g in genero:
+                    if g in genero_raw:
                         genero_final.append(g.capitalize())
-                if not genero_final and genero:
-                    genero_final = [genero.capitalize()]
+                if not genero_final and genero_raw:
+                    genero_final = [genero_raw.capitalize()]
                 item["reseña"] = ", ".join(genero_final) if genero_final else "N/A"
-                # Asignar número aleatorio de reseñas
+                # Assign a random number of reviews to simulate popularity
                 item["num_reseñas"] = random.randint(10, 5000)
-                # Solo agregar si el campo principal 'nombre' no está vacío
                 if item.get("nombre", "").strip():
                     items.append(item)
     except UnicodeDecodeError:
         print(f"[ADVERTENCIA] {path} no es UTF-8, intentando con latin-1...")
-        import random
-        GENEROS_COMUNES = ["acción", "aventura", "deportes", "estrategia", "ficción", "drama", "comedia", "fantasía", "terror", "romance", "misterio", "musical", "historia", "ciencia ficción"]
         with open(path, encoding="latin-1") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
             if not rows:
                 print(f"[ADVERTENCIA] El archivo {path} está vacío o no tiene datos.")
             for row in rows:
-                item = {}
+                item: Dict = {}
                 for k, v in conf["fields"].items():
                     if v == "":
                         item[k] = ""
                     elif k == "tags":
                         item[k] = parse_tags(row.get(v, ""))
                     elif k == "calificacion":
-                        item[k] = round(random.uniform(2.4, 5.0), 2)
+                        try:
+                            rating_str = row.get(v, "")
+                            item[k] = float(rating_str) if rating_str else round(random.uniform(2.4, 5.0), 2)
+                        except ValueError:
+                            item[k] = round(random.uniform(2.4, 5.0), 2)
                     else:
                         item[k] = row.get(v, "")
-                genero = (item.get("reseña", "") or "").lower()
-                genero_final = []
+                genero_raw = (item.get("reseña", "") or "").lower()
+                GENEROS_COMUNES = [
+                    "acción",
+                    "aventura",
+                    "deportes",
+                    "estrategia",
+                    "ficción",
+                    "drama",
+                    "comedia",
+                    "fantasía",
+                    "terror",
+                    "romance",
+                    "misterio",
+                    "musical",
+                    "historia",
+                    "ciencia ficción",
+                ]
+                genero_final: List[str] = []
                 for g in GENEROS_COMUNES:
-                    if g in genero:
+                    if g in genero_raw:
                         genero_final.append(g.capitalize())
-                if not genero_final and genero:
-                    genero_final = [genero.capitalize()]
+                if not genero_final and genero_raw:
+                    genero_final = [genero_raw.capitalize()]
                 item["reseña"] = ", ".join(genero_final) if genero_final else "N/A"
                 item["num_reseñas"] = random.randint(10, 5000)
                 if item.get("nombre", "").strip():
@@ -144,8 +200,10 @@ def import_category(cat, conf):
     print(f"[INFO] {cat}: {len(items)} elementos importados.")
     return items
 
-def main():
-    db = {"videojuegos": [], "peliculas": [], "libros": [], "musica": []}
+
+def main() -> None:
+    """Main function to import all categories and write to JSON."""
+    db: Dict[str, List[Dict]] = {cat: [] for cat in CONFIG.keys()}
     for cat, conf in CONFIG.items():
         print(f"Importando {cat}...")
         db[cat] = import_category(cat, conf)
@@ -156,6 +214,7 @@ def main():
     except Exception as e:
         print(f"[ERROR] No se pudo guardar el archivo JSON: {e}")
     print("¡Importación completada!")
+
 
 if __name__ == "__main__":
     main()
